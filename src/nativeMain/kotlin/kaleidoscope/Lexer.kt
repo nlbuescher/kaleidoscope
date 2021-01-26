@@ -36,12 +36,23 @@ object Lexer {
 				continue
 			}
 
-			// number : [0-9\.]+
-			if (char.isDigit() || char == '.') {
-				val (valueString, rest) = input.splitAtFirst { !it.isDigit() && it != '.' }
+			// number : '.' [0-9]+ | [0-9]+ '.'? [0-9]*
+			if (char.isDigit() || (char == '.' && input.getOrNull(1)?.isDigit() == true)) {
+				val (valueString, rest) = if (char == '.') {
+					val (fractionalPart, rest) = input.drop(1).splitAtFirst { !it.isDigit() }
+					".$fractionalPart" to rest
+				} else {
+					val (integerPart, afterDigits) = input.splitAtFirst { !it.isDigit() }
+					val (fractionalPart, rest) = if (afterDigits.firstOrNull() == '.') {
+						afterDigits.drop(1).splitAtFirst { !it.isDigit() }
+					} else {
+						"" to afterDigits
+					}
+					"$integerPart.$fractionalPart" to rest
+				}
+
 				input = rest
 
-				// fixme will throw if double is malformed (eg 1.0.0)
 				tokens.add(Token.Number(valueString.toDouble()))
 				continue
 			}

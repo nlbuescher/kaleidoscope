@@ -1,35 +1,25 @@
 package kaleidoscope
 
-import platform.posix.*
+class CompileError(message: String) : Exception(message)
 
 fun compileError(message: String): Nothing {
-	fprintf(stderr, "$message\n")
-	exit(1)
-	error("not reached")
+	throw CompileError(message)
 }
 
 fun main() {
-	// main input loop
-	print("ready> ")
-	var line = readLine()!!
-	while (true) {
-		if (line == "exit()") break
+	val compiler = Compiler()
 
-		val tokens = Lexer.tokenize(line)
-		val nodes = Parser.parse(tokens)
-		nodes.forEach {
-			if (it is Function) {
-				if (it.prototype.name == ANONYMOUS) {
-					println("parsed top-level expression")
-				} else {
-					println("parsed function definition")
-				}
-			} else {
-				println("parsed extern")
-			}
+	// main input loop
+	while (true) {
+		print("ready> ")
+		val line = readLine()!!
+		if (line == "exit()") {
+			println(compiler.generatedCode)
+
+			println("exited")
+			break
 		}
 
-		print("ready> ")
-		line = readLine()!!
+		compiler.handle(line)
 	}
 }
