@@ -2,10 +2,9 @@ package kaleidoscope
 
 object Lexer {
 	/**
-	 * Splits the string at the index of the first character matching the given
-	 * predicate.
-	 * If no character matching the predicate is found, the first part will
-	 * contain the entire String, and the second part, an empty String.
+	 * Splits the string at the index of the first character matching the given predicate.
+	 * If no character matching the predicate is found, the first part will contain the entire
+	 * string, and the second part, an empty string.
 	 */
 	private fun String.splitAtFirst(predicate: (Char) -> Boolean): Pair<String, String> {
 		val index = indexOfFirst(predicate).let { if (it < 0) length else it }
@@ -19,12 +18,12 @@ object Lexer {
 
 		val tokens = mutableListOf<Token>()
 		while (input.isNotEmpty()) {
-			// skip whitespace
+			// ignore whitespace
 			input = input.trim()
 
 			val char = input.firstOrNull() ?: continue
 
-			// identifier: [a-zA-Z][a-zA-Z0-9]*
+			// identifier : [a-zA-Z][a-zA-Z0-9]*
 			if (char.isLetter()) {
 				val (name, rest) = input.splitAtFirst { !it.isLetterOrDigit() }
 				input = rest
@@ -37,16 +36,17 @@ object Lexer {
 				continue
 			}
 
-			// number: [0-9\.]+
+			// number : [0-9\.]+
 			if (char.isDigit() || char == '.') {
 				val (valueString, rest) = input.splitAtFirst { !it.isDigit() && it != '.' }
 				input = rest
 
+				// fixme will throw if double is malformed (eg 1.0.0)
 				tokens.add(Token.Number(valueString.toDouble()))
 				continue
 			}
 
-			// ignore comments
+			// ignore comments until end of line
 			if (char == '#') {
 				val (_, rest) = input.splitAtFirst { char == '\n' || char == '\r' }
 				input = rest
