@@ -16,7 +16,7 @@ fun main() {
 		if (line == "exit()") {
 			println(compiler.generatedCode)
 
-			println("exited")
+			println("finished")
 			break
 		}
 

@@ -30,7 +30,8 @@ object Lexer {
 
 				when (name) {
 					"def" -> tokens.add(Token.Def)
-					"extern" -> tokens.add(Token.Extern)
+					// disable extern since it doesn't work with JIT
+					//"extern" -> tokens.add(Token.Extern)
 					else -> tokens.add(Token.Identifier(name))
 				}
 				continue

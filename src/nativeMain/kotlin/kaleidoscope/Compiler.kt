@@ -1,19 +1,37 @@
 package kaleidoscope
 
 import kotlinx.cinterop.*
-import platform.llvm.*
-import platform.llvm.LLVMLinkage.*
-import platform.llvm.LLVMRealPredicate.*
-import platform.llvm.LLVMVerifierFailureAction.*
+import llvm.*
 import platform.posix.*
+import kotlin.collections.*
 
 class Compiler {
-	private val module: LLVMModuleRef? = LLVMModuleCreateWithName("my cool jit")
+	private val namedValues = mutableMapOf<String, Value>()
 
-	private val builder: LLVMBuilderRef? = LLVMCreateBuilder()
-	private val namedValues = mutableMapOf<String, LLVMValueRef?>()
+	// open a new context and module
+	private val context = Context()
+	private val module = Module("my cool jit", context)
+	private val jit = Jit(module)
 
-	val generatedCode: String get() = LLVMPrintModuleToString(module)!!.toKString()
+	// create a new builder for the module
+	private val builder = IRBuilder(context)
+
+	// create a new pass manager attached to it
+	private val functionPassManager = FunctionPassManager(module).apply {
+		// do simple "peephole" and bit-twiddling optimizations
+		addInstructionCombiningPass()
+		// reassociate expressions
+		addReassociatePass()
+		// eliminate common sub-expressions
+		addGvnPass()
+		// simplify the control flow graph (deleting unreachable blocks, etc)
+		addCfgSimplificationPass()
+
+		initialize()
+	}
+
+
+	val generatedCode: String get() = module.printToString()
 
 	fun handle(string: String) {
 		try {
@@ -38,26 +56,26 @@ class Compiler {
 
 	private fun handleTopLevelExpression(function: Function) {
 		val value = function.generateIR()
-		println("read top-level expression:")
-		println(LLVMPrintValueToString(value)!!.toKString())
+		val anonFunction = jit.executionEngine.getFunctionAddress<() -> Double>(value.name)
+		println("evaluated to ${anonFunction?.invoke()}")
 	}
 
 	private fun handleDefinition(function: Function) {
 		val value = function.generateIR()
 		println("read function definition:")
-		println(LLVMPrintValueToString(value)!!.toKString())
+		println(value.printToString())
 	}
 
 	private fun handleExtern(function: Prototype) {
 		val value = function.generateIR()
 		println("read extern:")
-		println(LLVMPrintValueToString(value)!!.toKString())
+		println(value.printToString())
 	}
 
 
 	// generate IR
 
-	private fun Node.generateIR(): LLVMValueRef? = when (this) {
+	private fun Node.generateIR(): Value = when (this) {
 		is Prototype -> generateIR()
 		is Function -> generateIR()
 		is NumberExpression -> generateIR()
@@ -66,96 +84,85 @@ class Compiler {
 		is CallExpression -> generateIR()
 	}
 
-	private fun Prototype.generateIR(): LLVMValueRef? {
-		val function = memScoped {
-			val doubles = allocArray<LLVMTypeRefVar>(args.size) { value = LLVMDoubleType() }
+	private fun Prototype.generateIR(): llvm.Function {
+		val doubles = List(args.size) { DoubleType(context) }
+		val functionType = FunctionType(DoubleType(context), doubles)
 
-			val functionType = LLVMFunctionType(LLVMDoubleType(), doubles, args.size.toUInt(), 0)
-			LLVMAddFunction(module, name, functionType).also {
-				LLVMSetLinkage(it, LLVMExternalLinkage)
-			}
-		}
+		@Suppress("RemoveRedundantQualifierName")
+		val function = llvm.Function(functionType, Linkage.External, name, module)
 
-		args.forEachIndexed { i, argName ->
-			val arg = LLVMGetParam(function, i.toUInt())
-			LLVMSetValueName(arg, argName)
-		}
+		function.args.forEachIndexed { i, it -> it.name = args[i] }
 
 		return function
 	}
 
-	private fun Function.generateIR(): LLVMValueRef? {
-		val function = LLVMGetNamedFunction(module, prototype.name) ?: prototype.generateIR()
+	private fun Function.generateIR(): Value {
+		// first check for an existing function from a previous 'extern' declaration
+		val function = module.getFunction(prototype.name) ?: prototype.generateIR()
 
-		if (LLVMCountBasicBlocks(function).toInt() != 0) {
-			compileError("function cannot be redefined")
-		}
+		// create a new basic block to start insertion into
+		val block = BasicBlock(context, "entry", function)
+		builder.setInsertPoint(block)
 
-		val block = LLVMAppendBasicBlock(function, "entry")
-		LLVMPositionBuilderAtEnd(builder, block)
-
+		// record the function arguments in the namedValues map
 		namedValues.clear()
-		prototype.args.forEachIndexed { i, argName ->
-			val arg = LLVMGetParam(function, i.toUInt())
-			namedValues[argName] = arg
-		}
+		function.args.forEach { namedValues[it.name] = it }
 
 		val result = try {
 			body.generateIR()
 		} catch (error: CompileError) {
-			LLVMDeleteFunction(function)
+			// error reading body, remove function
+			function.eraseFromParent()
 			throw error
 		}
 
 		// finish off the function
-		LLVMBuildRet(builder, result)
+		builder.createReturn(result)
 
-		// validate the generated code
-		LLVMVerifyFunction(function, LLVMPrintMessageAction)
+		// validate the generated code, checking for consistency
+		llvm.Function.verify(function)
+
+		// optimize the function
+		functionPassManager.runOn(function)
 
 		return function
 	}
 
-	private fun NumberExpression.generateIR(): LLVMValueRef? {
-		return LLVMConstReal(LLVMDoubleType(), value)
+	private fun NumberExpression.generateIR(): Value {
+		return RealConstant(DoubleType(context), value)
 	}
 
-	private fun VariableExpression.generateIR(): LLVMValueRef? {
-		if (name !in namedValues) compileError("unknown variable name")
-		return namedValues[name]
+	private fun VariableExpression.generateIR(): Value {
+		return namedValues[name] ?: compileError("unknown variable name")
 	}
 
-	private fun BinaryExpression.generateIR(): LLVMValueRef? {
+	private fun BinaryExpression.generateIR(): Value {
 		val l = lhs.generateIR()
 		val r = rhs.generateIR()
 
 		return when (operator) {
-			'+' -> LLVMBuildFAdd(builder, l, r, "addtmp")
-			'-' -> LLVMBuildFSub(builder, l, r, "subtmp")
-			'*' -> LLVMBuildFMul(builder, l, r, "multmp")
-			'<' -> LLVMBuildFCmp(builder, LLVMRealULT, l, r, "cmptmp")?.let { comparison ->
-				LLVMBuildUIToFP(builder, comparison, LLVMDoubleType(), "booltmp")
+			'+' -> builder.createFAdd(l, r, "addtmp")
+			'-' -> builder.createFSub(l, r, "subtmp")
+			'*' -> builder.createFMul(l, r, "multmp")
+			'<' -> {
+				val comparison = builder.createFCmpULT(l, r, "cmptmp")
+				builder.createUIToFP(comparison, DoubleType(context), "booltmp")
 			}
 			else -> compileError("invalid binary operator")
 		}
 	}
 
-	private fun CallExpression.generateIR(): LLVMValueRef? {
+	private fun CallExpression.generateIR(): Value {
 		// look up the name in the global module table
-		val function = LLVMGetNamedFunction(module, callee)
+		val function = module.getFunction(callee)
 			?: compileError("unknown function referenced")
 
-		if (LLVMCountParams(function).toInt() != args.size) {
+		if (function.args.size != args.size) {
 			compileError("incorrect number of arguments")
 		}
 
-		return memScoped {
-			val argValues = allocArray<LLVMValueRefVar>(args.size)
-			args.forEachIndexed { i, it ->
-				argValues[i] = it.generateIR()
-			}
+		val argValues = args.map { it.generateIR() }
 
-			LLVMBuildCall(builder, function, argValues, args.size.toUInt(), "calltmp")
-		}
+		return builder.createCall(function, argValues, "calltmp")
 	}
 }
