@@ -11,6 +11,8 @@ endif ()
 
 set(SOURCES
 	src/main.cpp
-	src/kaleidoscope/lexer.cpp)
+	src/kaleidoscope/lexer.cpp
+	src/kaleidoscope/parser.cpp
+	src/kaleidoscope/compiler.cpp)
 
 add_executable(kaleidoscope ${SOURCES})
