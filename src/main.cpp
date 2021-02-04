@@ -16,5 +16,7 @@ int main()
 		compiler.handle(line);
 	}
 
+	compiler.print(llvm::outs());
+
 	std::cout << "finished\n";
 }
