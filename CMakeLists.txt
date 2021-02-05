@@ -16,7 +16,6 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
-llvm_map_components_to_libnames(LLVM_LIBRARIES core)
 
 set(SOURCES
 	src/main.cpp
@@ -25,5 +24,4 @@ set(SOURCES
 	src/kaleidoscope/compiler.cpp)
 
 add_executable(kaleidoscope ${SOURCES})
-
-target_link_libraries(kaleidoscope ${LLVM_LIBRARIES})
+llvm_config(kaleidoscope core native orcjit)

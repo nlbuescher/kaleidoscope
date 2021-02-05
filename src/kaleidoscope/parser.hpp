@@ -119,7 +119,7 @@ public:
 	Function(std::unique_ptr<Prototype> a_prototype, std::unique_ptr<Expression> a_body) noexcept
 		: m_prototype{std::move(a_prototype)}, m_body{std::move(a_body)} {}
 
-	[[nodiscard]] const std::unique_ptr<Prototype>& prototype() const noexcept { return m_prototype; }
+	[[nodiscard]] std::unique_ptr<Prototype>& prototype() noexcept { return m_prototype; }
 	[[nodiscard]] const std::unique_ptr<Expression>& body() const noexcept { return m_body; }
 
 	[[nodiscard]] Type type() const noexcept override { return Type::Function; }
