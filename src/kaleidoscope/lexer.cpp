@@ -17,23 +17,41 @@ TokenStream& TokenStream::operator>>(Token& a_token) noexcept
 
 	// identifier: [a-zA-Z][a-zA-Z0-9]*
 	if (isalpha(m_current)) {
-		std::string name{};
+		std::string content{};
 		do {
-			name += m_current;
+			content += m_current;
 			m_current = getChar();
 		} while (isalnum(m_current));
 
-		if (name == "def") {
-			a_token = Token{Token::Type::Def, name};
+		if (content == "def") {
+			a_token = Token{Token::Type::Def, content};
 			return *this;
 		}
-
-		if (name == "extern") {
-			a_token = Token{Token::Type::Extern, name};
+		if (content == "extern") {
+			a_token = Token{Token::Type::Extern, content};
 			return *this;
 		}
-
-		a_token = Token{Token::Type::Identifier, name};
+		if (content == "if") {
+			a_token = Token{Token::Type::If, content};
+			return *this;
+		}
+		if (content == "then") {
+			a_token = Token{Token::Type::Then, content};
+			return *this;
+		}
+		if (content == "else") {
+			a_token = Token{Token::Type::Else, content};
+			return *this;
+		}
+		if (content == "for") {
+			a_token = Token{Token::Type::For, content};
+			return *this;
+		}
+		if (content == "in") {
+			a_token = Token{Token::Type::In, content};
+			return *this;
+		}
+		a_token = Token{Token::Type::Identifier, content};
 		return *this;
 	}
 

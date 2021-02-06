@@ -93,6 +93,73 @@ std::unique_ptr<Expression> NodeStream::parseIdentifierExpression()
 	return std::make_unique<CallExpression>(std::move(name), std::move(args));
 }
 
+std::unique_ptr<Expression> NodeStream::parseIfExpression()
+{
+	m_input >> m_current; // eat 'if'
+
+	// condition
+	auto condition = parseExpression();
+
+	if (m_current.type() != Token::Type::Then) {
+		throw CompileError{"expected then"};
+	}
+	m_input >> m_current; // eat 'then'
+
+	auto thenBody = parseExpression();
+
+	if (m_current.type() != Token::Type::Else) {
+		throw CompileError{"expected else"};
+	}
+	m_input >> m_current; // eat 'else'
+
+	auto elseBody = parseExpression();
+
+	return std::make_unique<IfExpression>(std::move(condition), std::move(thenBody), std::move(elseBody));
+}
+
+std::unique_ptr<Expression> NodeStream::parseForExpression()
+{
+	m_input >> m_current; // eat 'for'
+
+	if (m_current.type() != Token::Type::Identifier) {
+		throw CompileError{"expected identifier after for"};
+	}
+
+	std::string name = m_current.content();
+	m_input >> m_current; // eat identifier
+
+	if (m_current != '=') {
+		throw CompileError{"expected '=' after for"};
+	}
+	m_input >> m_current; // eat '='
+
+	auto start = parseExpression();
+
+	if (m_current != ',') {
+		throw CompileError{"expected ',' after for start value"};
+	}
+	m_input >> m_current; // eat ','
+
+	auto end = parseExpression();
+
+	// the step value is optional
+	std::unique_ptr<Expression> step{nullptr};
+	if (m_current == ',') {
+		m_input >> m_current; // eat ','
+		step = parseExpression();
+	}
+
+	if (m_current.type() != Token::Type::In) {
+		throw CompileError{"expected 'in' after for"};
+	}
+	m_input >> m_current; // eat 'in'
+
+	auto body = parseExpression();
+
+	return std::make_unique<ForExpression>(
+		std::move(name), std::move(start), std::move(end), std::move(step), std::move(body));
+}
+
 std::unique_ptr<Expression> NodeStream::parsePrimaryExpression()
 {
 	if (m_current.type() == Token::Type::Identifier) {
@@ -103,6 +170,12 @@ std::unique_ptr<Expression> NodeStream::parsePrimaryExpression()
 	}
 	if (m_current == '(') {
 		return parseParenExpression();
+	}
+	if (m_current.type() == Token::Type::If) {
+		return parseIfExpression();
+	}
+	if (m_current.type() == Token::Type::For) {
+		return parseForExpression();
 	}
 	throw CompileError{"unknown token when expecting expression"};
 }

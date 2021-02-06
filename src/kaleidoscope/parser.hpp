@@ -24,6 +24,8 @@ public:
 		VariableExpression,
 		BinaryExpression,
 		CallExpression,
+		IfExpression,
+		ForExpression,
 		Prototype,
 		Function
 	};
@@ -43,7 +45,7 @@ private:
 public:
 	explicit NumberExpression(double a_value) noexcept: m_value{a_value} {}
 
-	[[nodiscard]] const double& value() const noexcept { return m_value; }
+	[[nodiscard]] double& value() noexcept { return m_value; }
 
 	[[nodiscard]] Type type() const noexcept override { return Type::NumberExpression; }
 };
@@ -56,7 +58,7 @@ private:
 public:
 	explicit VariableExpression(std::string a_name) noexcept: m_name{std::move(a_name)} {}
 
-	[[nodiscard]] const std::string& name() const noexcept { return m_name; }
+	[[nodiscard]] std::string& name() noexcept { return m_name; }
 
 	[[nodiscard]] Type type() const noexcept override { return Type::VariableExpression; }
 };
@@ -71,9 +73,9 @@ public:
 	BinaryExpression(char a_op, std::unique_ptr<Expression> a_lhs, std::unique_ptr<Expression> a_rhs) noexcept
 		: m_op{a_op}, m_lhs{std::move(a_lhs)}, m_rhs{std::move(a_rhs)} {}
 
-	[[nodiscard]] const char& op() const noexcept { return m_op; }
-	[[nodiscard]] const std::unique_ptr<Expression>& lhs() const noexcept { return m_lhs; }
-	[[nodiscard]] const std::unique_ptr<Expression>& rhs() const noexcept { return m_rhs; }
+	[[nodiscard]] char& op() noexcept { return m_op; }
+	[[nodiscard]] std::unique_ptr<Expression>& lhs() noexcept { return m_lhs; }
+	[[nodiscard]] std::unique_ptr<Expression>& rhs() noexcept { return m_rhs; }
 
 	[[nodiscard]] Type type() const noexcept override { return Type::BinaryExpression; }
 };
@@ -88,10 +90,61 @@ public:
 	CallExpression(std::string a_callee, std::vector<std::unique_ptr<Expression>> a_args) noexcept
 		: m_callee{std::move(a_callee)}, m_args{std::move(a_args)} {}
 
-	[[nodiscard]] const std::string& callee() const noexcept { return m_callee; }
-	[[nodiscard]] const std::vector<std::unique_ptr<Expression>>& args() const noexcept { return m_args; }
+	[[nodiscard]] std::string& callee() noexcept { return m_callee; }
+	[[nodiscard]] std::vector<std::unique_ptr<Expression>>& args() noexcept { return m_args; }
 
 	[[nodiscard]] Type type() const noexcept override { return Type::CallExpression; }
+};
+
+class IfExpression : public Expression
+{
+private:
+	std::unique_ptr<Expression> m_condition, m_thenBody, m_elseBody;
+
+public:
+	IfExpression(
+		std::unique_ptr<Expression> a_condition,
+		std::unique_ptr<Expression> a_thenBody,
+		std::unique_ptr<Expression> a_elseBody
+	) noexcept
+		: m_condition{std::move(a_condition)}
+		, m_thenBody{std::move(a_thenBody)}
+		, m_elseBody{std::move(a_elseBody)} {}
+
+	[[nodiscard]] std::unique_ptr<Expression>& condition() noexcept { return m_condition; }
+	[[nodiscard]] std::unique_ptr<Expression>& thenBody() noexcept { return m_thenBody; }
+	[[nodiscard]] std::unique_ptr<Expression>& elseBody() noexcept { return m_elseBody; }
+
+	[[nodiscard]] Type type() const noexcept override { return Type::IfExpression; }
+};
+
+class ForExpression : public Expression
+{
+private:
+	std::string m_varName;
+	std::unique_ptr<Expression> m_start, m_end, m_step, m_body;
+
+public:
+	ForExpression(
+		std::string a_varName,
+		std::unique_ptr<Expression> a_start,
+		std::unique_ptr<Expression> a_end,
+		std::unique_ptr<Expression> a_step,
+		std::unique_ptr<Expression> a_body
+	) noexcept
+		: m_varName{std::move(a_varName)}
+		, m_start{std::move(a_start)}
+		, m_end{std::move(a_end)}
+		, m_step{std::move(a_step)}
+		, m_body{std::move(a_body)} {}
+
+	[[nodiscard]] std::string& varName() noexcept { return m_varName; }
+	[[nodiscard]] std::unique_ptr<Expression>& start() noexcept { return m_start; }
+	[[nodiscard]] std::unique_ptr<Expression>& end() noexcept { return m_end; }
+	[[nodiscard]] std::unique_ptr<Expression>& step() noexcept { return m_step; }
+	[[nodiscard]] std::unique_ptr<Expression>& body() noexcept { return m_body; }
+
+	[[nodiscard]] Type type() const noexcept override { return Type::ForExpression; }
 };
 
 class Prototype : public Node
@@ -103,8 +156,8 @@ public:
 	Prototype(std::string a_name, std::vector<std::string> a_args) noexcept
 		: m_name{std::move(a_name)}, m_args{std::move(a_args)} {}
 
-	[[nodiscard]] const std::string& name() const noexcept { return m_name; }
-	[[nodiscard]] const std::vector<std::string>& args() const noexcept { return m_args; }
+	[[nodiscard]] std::string& name() noexcept { return m_name; }
+	[[nodiscard]] std::vector<std::string>& args() noexcept { return m_args; }
 
 	[[nodiscard]] Type type() const noexcept override { return Type::Prototype; }
 };
@@ -120,7 +173,7 @@ public:
 		: m_prototype{std::move(a_prototype)}, m_body{std::move(a_body)} {}
 
 	[[nodiscard]] std::unique_ptr<Prototype>& prototype() noexcept { return m_prototype; }
-	[[nodiscard]] const std::unique_ptr<Expression>& body() const noexcept { return m_body; }
+	[[nodiscard]] std::unique_ptr<Expression>& body() noexcept { return m_body; }
 
 	[[nodiscard]] Type type() const noexcept override { return Type::Function; }
 };
@@ -163,6 +216,12 @@ private:
 	///		::= identifier '(' expression* ')'
 	std::unique_ptr<Expression> parseIdentifierExpression();
 
+	/// ifExpression ::= 'if' expression 'then' expression 'else' expression
+	std::unique_ptr<Expression> parseIfExpression();
+
+	/// forExpression ::= 'for' identifier '=' expression ',' expression (',' expression)? 'in' expression
+	std::unique_ptr<Expression> parseForExpression();
+
 	/// primaryExpression
 	///		::= identifierExpression
 	///		::= numberExpression
@@ -180,14 +239,14 @@ private:
 	/// 	::= primary binaryOpRhs
 	std::unique_ptr<Expression> parseExpression();
 
-	/// m_prototype
+	/// prototype
 	/// 	::= identifier '(' identifier ')'
 	std::unique_ptr<Prototype> parsePrototype();
 
-	/// definition ::= 'def' m_prototype expression
+	/// definition ::= 'def' prototype expression
 	std::unique_ptr<Function> parseDefinition();
 
-	/// external ::= 'extern' m_prototype
+	/// external ::= 'extern' prototype
 	std::unique_ptr<Prototype> parseExtern();
 
 	/// topLevelExpression ::= expression

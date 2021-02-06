@@ -83,6 +83,7 @@ void Compiler::handle(std::string a_input) noexcept
 void Compiler::handleTopLevelExpression(std::unique_ptr<Function> a_function)
 {
 	generateIRFrom(*a_function);
+
 	// jit the module containing the anonymous expression,
 	// keeping the key so we can free it later
 	auto key = m_jit->addModule(std::move(m_module));
@@ -132,6 +133,12 @@ llvm::Value* Compiler::generateIRFrom(Node& a_node)
 	}
 	if (a_node.type() == Node::Type::CallExpression) {
 		return generateIRFrom(dynamic_cast<CallExpression&>(a_node));
+	}
+	if (a_node.type() == Node::Type::IfExpression) {
+		return generateIRFrom(dynamic_cast<IfExpression&>(a_node));
+	}
+	if (a_node.type() == Node::Type::ForExpression) {
+		return generateIRFrom(dynamic_cast<ForExpression&>(a_node));
 	}
 	if (a_node.type() == Node::Type::Prototype) {
 		return generateIRFrom(dynamic_cast<Prototype&>(a_node));
@@ -196,6 +203,122 @@ llvm::Value* Compiler::generateIRFrom(CallExpression& a_expression)
 	}
 
 	return m_builder.CreateCall(callee, args, "calltmp");
+}
+
+llvm::Value* Compiler::generateIRFrom(IfExpression& a_expression)
+{
+	auto condition = generateIRFrom(*a_expression.condition());
+
+	// convert condition to bool by comparing non-equal to 0.0
+	condition = m_builder.CreateFCmpONE(condition, llvm::ConstantFP::get(m_context, llvm::APFloat(0.0)), "ifcond");
+	auto function = m_builder.GetInsertBlock()->getParent();
+
+	// create blocks for the then and else cases
+	// insert the 'then' block at the end of the function
+	auto thenBlock = llvm::BasicBlock::Create(m_context, "then", function);
+	auto elseBlock = llvm::BasicBlock::Create(m_context, "else");
+	auto mergeBlock = llvm::BasicBlock::Create(m_context, "ifcont");
+
+	m_builder.CreateCondBr(condition, thenBlock, elseBlock);
+
+	// emit then value
+	m_builder.SetInsertPoint(thenBlock);
+
+	auto thenBody = generateIRFrom(*a_expression.thenBody());
+
+	m_builder.CreateBr(mergeBlock);
+	// codegen for 'then' can change current block, update thenBlock
+	thenBlock = m_builder.GetInsertBlock();
+
+	// emit else block
+	function->getBasicBlockList().push_back(elseBlock);
+	m_builder.SetInsertPoint(elseBlock);
+
+	auto elseBody = generateIRFrom(*a_expression.elseBody());
+
+	m_builder.CreateBr(mergeBlock);
+	// codegen of 'else' can change the current block, update elseBlock
+	elseBlock = m_builder.GetInsertBlock();
+
+	// emit merge block
+	function->getBasicBlockList().push_back(mergeBlock);
+	m_builder.SetInsertPoint(mergeBlock);
+
+	auto phi = m_builder.CreatePHI(llvm::Type::getDoubleTy(m_context), 2, "iftmp");
+	phi->addIncoming(thenBody, thenBlock);
+	phi->addIncoming(elseBody, elseBlock);
+	return phi;
+}
+
+llvm::Value* Compiler::generateIRFrom(ForExpression& a_expression)
+{
+	// emit the start code first, without 'variable' in scope
+	auto start = generateIRFrom(*a_expression.start());
+
+	// make the new basic block for the loop header, inserting after current block
+	auto function = m_builder.GetInsertBlock()->getParent();
+	auto preHeaderBlock = m_builder.GetInsertBlock();
+	auto loopBlock = llvm::BasicBlock::Create(m_context, "loop", function);
+
+	// insert an explicit fall-through from the current block to the loopBlock
+	m_builder.CreateBr(loopBlock);
+
+	// start insertion in loopBlock
+	m_builder.SetInsertPoint(loopBlock);
+
+	// start the PHI node with an entry for start
+	auto variable = m_builder.CreatePHI(llvm::Type::getDoubleTy(m_context), 2, a_expression.varName());
+	variable->addIncoming(start, preHeaderBlock);
+
+	// within the loop, the variable is defined equal to the PHI node
+	// if it shadows an existing variable, we have to restore it, so save it now
+	auto shadowed = m_namedValues[a_expression.varName()];
+	m_namedValues[a_expression.varName()] = variable;
+
+	// emit the body of the loop
+	// this, like any other expression can change the current block.
+	// note that we ignore the value computed by the body
+	generateIRFrom(*a_expression.body());
+
+	// emit the step value
+	llvm::Value* step{nullptr};
+	if (a_expression.step()) {
+		step = generateIRFrom(*a_expression.step());
+	} else {
+		// if not specified, use 1.0
+		step = llvm::ConstantFP::get(m_context, llvm::APFloat(1.0));
+	}
+
+	auto nextVar = m_builder.CreateFAdd(variable, step, "nextvar");
+
+	// compute the end condition
+	auto end = generateIRFrom(*a_expression.end());
+
+	// convert condition to a bool by comparing non-equal to 0.0
+	end = m_builder.CreateFCmpONE(end, llvm::ConstantFP::get(m_context, llvm::APFloat(0.0)), "loopcond");
+
+	// create the 'after loop' block and insert it
+	auto loopEndBlock = m_builder.GetInsertBlock();
+	auto afterBlock = llvm::BasicBlock::Create(m_context, "afterloop", function);
+
+	// insert the conditional branch into the end of loopEndBlock
+	m_builder.CreateCondBr(end, loopBlock, afterBlock);
+
+	// any new code will be inserted in afterBlock
+	m_builder.SetInsertPoint(afterBlock);
+
+	// add a new entry to the PHI node for the back edge
+	variable->addIncoming(nextVar, loopEndBlock);
+
+	// restore the shadowed variable
+	if (shadowed) {
+		m_namedValues[a_expression.varName()] = shadowed;
+	} else {
+		m_namedValues.erase(a_expression.varName());
+	}
+
+	// for expression always returns 0.0
+	return llvm::Constant::getNullValue(llvm::Type::getDoubleTy(m_context));
 }
 
 llvm::Function* Compiler::generateIRFrom(Prototype& a_prototype)

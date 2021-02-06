@@ -39,14 +39,18 @@ private:
 			[](llvm::Error a_error)
 			{
 				llvm::cantFail(std::move(a_error), "lookupFlags failed");
-			})};
+			}
+		)
+	};
 	ObjLayerT m_objectLayer{
 		llvm::AcknowledgeORCv1Deprecation, m_executionSession, [this](llvm::orc::VModuleKey)
 		{
 			return ObjLayerT::Resources{std::make_shared<llvm::SectionMemoryManager>(), m_resolver};
-		}};
+		}
+	};
 	CompileLayerT m_compileLayer{
-		llvm::AcknowledgeORCv1Deprecation, m_objectLayer, llvm::orc::SimpleCompiler{*m_targetMachine}};
+		llvm::AcknowledgeORCv1Deprecation, m_objectLayer, llvm::orc::SimpleCompiler{*m_targetMachine}
+	};
 
 public:
 	JIT() { llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr); }

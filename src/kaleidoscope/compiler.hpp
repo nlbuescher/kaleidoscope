@@ -65,6 +65,8 @@ private:
 	llvm::Value* generateIRFrom(VariableExpression& a_expression);
 	llvm::Value* generateIRFrom(BinaryExpression& a_expression);
 	llvm::Value* generateIRFrom(CallExpression& a_expression);
+	llvm::Value* generateIRFrom(IfExpression& a_expression);
+	llvm::Value* generateIRFrom(ForExpression& a_expression);
 	llvm::Function* generateIRFrom(Prototype& a_prototype);
 	llvm::Function* generateIRFrom(Function& a_function);
 };

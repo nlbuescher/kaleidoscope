@@ -18,6 +18,10 @@ public:
 		// primary
 		Identifier, Number,
 
+		// control
+		If, Then, Else,
+		For, In,
+
 		Other,
 	};
 
