@@ -3,13 +3,13 @@ package = platform.llvm
 headerFilter = llvm-c/* llvm-c/Transforms/*
 
 headers = llvm-c/Analysis.h llvm-c/BitReader.h llvm-c/BitWriter.h llvm-c/Comdat.h llvm-c/Core.h \
-	llvm-c/DataTypes.h llvm-c/DebugInfo.h llvm-c/Disassembler.h llvm-c/DisassemblerTypes.h \
-	llvm-c/Error.h llvm-c/ErrorHandling.h llvm-c/ExecutionEngine.h llvm-c/ExternC.h \
-	llvm-c/IRReader.h llvm-c/Initialization.h llvm-c/LinkTimeOptimizer.h llvm-c/Linker.h \
-	llvm-c/Object.h llvm-c/Orc.h llvm-c/OrcBindings.h llvm-c/Remarks.h llvm-c/Support.h \
-	llvm-c/Target.h llvm-c/TargetMachine.h llvm-c/Types.h llvm-c/lto.h \
-	llvm-c/Transforms/AggressiveInstCombine.h llvm-c/Transforms/Coroutines.h \
-	llvm-c/Transforms/IPO.h llvm-c/Transforms/InstCombine.h llvm-c/Transforms/PassManagerBuilder.h \
+	llvm-c/DataTypes.h llvm-c/DebugInfo.h llvm-c/Deprecated.h llvm-c/Disassembler.h \
+	llvm-c/DisassemblerTypes.h llvm-c/Error.h llvm-c/ErrorHandling.h llvm-c/ExecutionEngine.h \
+	llvm-c/ExternC.h llvm-c/IRReader.h llvm-c/Initialization.h llvm-c/LLJIT.h llvm-c/Linker.h \
+	llvm-c/Object.h llvm-c/Orc.h llvm-c/OrcEE.h llvm-c/Remarks.h llvm-c/Support.h llvm-c/Target.h \
+	llvm-c/TargetMachine.h llvm-c/Types.h llvm-c/lto.h llvm-c/Transforms/AggressiveInstCombine.h \
+	llvm-c/Transforms/Coroutines.h llvm-c/Transforms/IPO.h llvm-c/Transforms/InstCombine.h \
+	llvm-c/Transforms/PassBuilder.h llvm-c/Transforms/PassManagerBuilder.h \
 	llvm-c/Transforms/Scalar.h llvm-c/Transforms/Utils.h llvm-c/Transforms/Vectorize.h
 
 
